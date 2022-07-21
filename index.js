@@ -3,6 +3,20 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+export function checkEnv(options) {
+  options.keys
+    .filter((key) => !(key in process.env))
+    .forEach((key) => options.onMissing(key));
+}
+
+checkEnv({
+  keys: [ 'PENDO_API_KEY', 'HUBSPOT_API_KEY' ],
+  onMissing: (key) => {
+    console.error(`${key} is undefined. Exiting...`);
+    process.exit(1);
+  }
+});
+
 const { PENDO_API_KEY, HUBSPOT_API_KEY } = process.env;
 
 const pendoClient = (function (options) {

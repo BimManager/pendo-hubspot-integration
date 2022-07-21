@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 
-import { preprocessPendoEvent } from '../index.js';
+import { checkEnv, preprocessPendoEvent } from '../index.js';
 
 const npsDisplayedEventPayload = {
   "app": {
@@ -104,6 +104,13 @@ const npsSubmittedEventPayload = {
   "visitorId": "Webhook Visitor",
   "uniqueId": "ccb0f95474ae8b630ede92f8f8dbac03cddfc1c3"
 };
+
+(function testCheckEnv() {
+  let keys = [ 'PENDO_API_KEY', 'HUBSPOT_API_KEY' ];
+  checkEnv({ keys, onMissing: () => assert.fail() });
+  keys = [ 'PENDO_API_KEY', 'HUBSPOT_API_KEY', 'DUMMY' ];
+  checkEnv({ keys, onMissing: (key) => assert.equal(key, 'DUMMY') });
+}());
 
 (function testPreprocessPendoEvent_npsSubmittedEvent() {
   preprocessPendoEvent(npsSubmittedEventPayload)
