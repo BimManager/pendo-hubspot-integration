@@ -19,6 +19,33 @@ checkEnv({
 
 const { PENDO_API_KEY, HUBSPOT_API_KEY } = process.env;
 
+function processFetchResponse(response) {
+  return new Promise((resolve, reject) => {
+    const reply = {
+      ok: false,
+      isBase64Encoded: false,
+      statusCode: response.status,
+      headers: response.headers,
+      body: { statusText: response.statusText },
+      error: null
+    };
+    if (response.ok) {
+      response.json()
+        .then((body) => {
+          reply.ok = true;
+          reply.body = body;
+          resolve(reply);
+        })
+        .catch((error) => {
+          reply.error = error;
+          reject(reply)
+        });
+    } else {
+      reject(reply);
+    }
+  });
+}
+
 const pendoClient = (function (options) {
   const { baseUrl, version, pendoApiKey } = options;
   const headers = {
@@ -47,7 +74,7 @@ const hubspotClient = (function (options) {
   return {
     createOrUpdateContact: function (email, properties) {
       return fetch(
-        `${baseUrl}/contacts/${version}/createOrUpdate/`
+        `${baseUrl}/contacts/${version}/contact/createOrUpdate/`
           + `email/${email}?hapikey=${hubspotApiKey}`, {
             method: 'POST',
             headers: headers,
@@ -56,7 +83,7 @@ const hubspotClient = (function (options) {
     }
   };
 }({
-  baseUrl: 'https://api.hubspot.com',
+  baseUrl: 'https://api.hubapi.com',
   version: 'v1',
   hubspotApiKey: HUBSPOT_API_KEY
 }));
@@ -75,39 +102,32 @@ export function formatResponse(options) {
 }
 
 export function preprocessPendoEvent(payload) {
+  payload = JSON.parse(payload);
   const { event, visitorId, properties: { nps } } = payload;
   return new Promise((resolve, reject) => {
     if (!nps) {
       reject(formatResponse({
         statusCode: 400,
-        body: { error: `npsSubmitted is expected but was ${event}` }
+        body: { error: 'nps is not defined' }
       }));
-    } 
-    resolve({ event, visitorId, nps });
+    } else {
+      resolve({ event, visitorId, nps });
+    }
   });
 };
 
 export function getVisitorEmail(options) {
   return pendoClient.getVisitor(options.visitorId)
     .then((response) => {
-      if (!response.ok) {
-        Promise.reject(formatResponse({
-          statusCode: 408,
-          body: { error: 'Network response was not OK.' }
-        }));
-      }
-      return response.json()
+      return processFetchResponse(response)
+        .then((response) => {
+          const { email, metadata: { agent: { email: agent_email } } }
+                = response.body;
+          return email || agent_email;
+        })
+        .catch((error) => error);
     })
-    .then((body) => {
-      const { email, metadata: { agent: { email: agent_email } } } = body;
-      return email || agent_email;
-    })
-    .catch((error) => {
-      return formatResponse({
-        statusCode: 500,
-        body: { error }
-      });
-    })
+    .catch((error) => error);
 }
 
 export function updateHubSpotContact(options) {
@@ -117,7 +137,7 @@ export function updateHubSpotContact(options) {
 }
 
 export async function handler(event, context) {
-  preprocessPendoEvent(event)
+  return preprocessPendoEvent(event.body)
     .then((payload) => {
       return Promise.all([
         getVisitorEmail({ visitorId: payload.visitorId }),
@@ -129,17 +149,16 @@ export async function handler(event, context) {
     })
     .then((response) => {      
       if (!response.ok) {
-        Promise.reject('A problem occurred while create a HubSpot contact: '
-                       + `${response.status} ${response.statusText}`);
+        return Promise.reject(formatResponse({
+          statusCode: 500,
+          body: { error: 'A problem occurred while updating an nps_rating: '
+                  + `${response.status} ${response.statusText}` }
+        }));
+      } else {        
+        return processFetchResponse(response);
       }
-      return response;
     })
-    .catch((error) => {
-      formatResponse({
-        statusCode: 500,
-        body: { error }
-      });
-    })
+    .catch((error) => error);
 }
 
 
