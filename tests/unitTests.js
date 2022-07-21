@@ -1,6 +1,7 @@
 import * as assert from 'assert';
+import * as qs from 'querystring';
 
-import { checkEnv, preprocessPendoEvent } from '../index.js';
+import { checkEnv, formatResponse, preprocessPendoEvent } from '../index.js';
 
 const npsDisplayedEventPayload = {
   "app": {
@@ -112,6 +113,35 @@ const npsSubmittedEventPayload = {
   checkEnv({ keys, onMissing: (key) => assert.equal(key, 'DUMMY') });
 }());
 
+(function testFormatResponse() {
+  assert.equal(JSON.stringify(formatResponse()),
+               JSON.stringify({
+                 isBase64Encoded: false,
+                 statusCode: 200,
+                 headers: {
+                   'content-type': 'application/json'
+                 },
+                 body: {}                 
+               }));
+
+  assert.equal(JSON.stringify(formatResponse({
+    isBase64Encoded: true,
+    statusCode: 203,
+    headers: {
+      'content-type': 'x-www-urlencoded'
+    },
+    body: qs.encode({ message: '42' })
+  })),
+  JSON.stringify({
+    isBase64Encoded: true,
+    statusCode: 203,
+    headers: {
+      'content-type': 'x-www-urlencoded'
+    },
+    body: 'message=42'
+  }));
+}());
+
 (function testPreprocessPendoEvent_npsSubmittedEvent() {
   preprocessPendoEvent(npsSubmittedEventPayload)
     .then((parsed) => {
@@ -127,7 +157,16 @@ const npsSubmittedEventPayload = {
 (function testPreprocessPendoEvent_npsDisplayedEvent() {
   preprocessPendoEvent(npsDisplayedEventPayload)
     .then(() => assert.fail())
-    .catch((error) => assert.match(error, /npsDisplayed/));
+    .catch((error) => {
+      assert.equal(JSON.stringify(error), JSON.stringify({
+        isBase64Encoded: false,
+        statusCode: 400,
+        headers: {
+          'content-type': 'application/json'
+        },
+        body: { error: 'npsSubmitted is expected but was npsDisplayed' }
+      }));
+    });
 }());
 
-console.log('TESTS HAVE PASSED');
+setTimeout(() => console.log('TESTS HAVE PASSED'), 1000);

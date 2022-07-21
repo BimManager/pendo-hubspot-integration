@@ -60,13 +60,28 @@ const hubspotClient = (function (options) {
   version: 'v1',
   hubspotApiKey: HUBSPOT_API_KEY
 }));
-  
+
+
+export function formatResponse(options) {
+  options = options || {};
+  return {
+    isBase64Encoded: options.isBase64Encoded || false,
+    statusCode: options.statusCode || 200,
+    headers: Object.assign({
+      'content-type': 'application/json'
+    }, options.headers),
+    body: options.body || {}
+  };
+}
 
 export function preprocessPendoEvent(payload) {
   const { event, visitorId, properties: { nps } } = payload;
   return new Promise((resolve, reject) => {
     if (!nps) {
-      reject(`npsSubmitted is expected but was ${event}`);
+      reject(formatResponse({
+        statusCode: 400,
+        body: { error: `npsSubmitted is expected but was ${event}` }
+      }));
     } 
     resolve({ event, visitorId, nps });
   });
@@ -75,14 +90,24 @@ export function preprocessPendoEvent(payload) {
 export function getVisitorEmail(options) {
   return pendoClient.getVisitor(options.visitorId)
     .then((response) => {
-      if (!response.ok) { Promise.reject('Network response was not OK.'); }
+      if (!response.ok) {
+        Promise.reject(formatResponse({
+          statusCode: 408,
+          body: { error: 'Network response was not OK.' }
+        }));
+      }
       return response.json()
     })
     .then((body) => {
       const { email, metadata: { agent: { email: agent_email } } } = body;
       return email || agent_email;
     })
-    .catch((error) => console.error(error));
+    .catch((error) => {
+      return formatResponse({
+        statusCode: 500,
+        body: { error }
+      });
+    })
 }
 
 export function updateHubSpotContact(options) {
@@ -92,7 +117,7 @@ export function updateHubSpotContact(options) {
 }
 
 export async function handler(event, context) {
-  preprocessPendoEvent(event.body)
+  preprocessPendoEvent(event)
     .then((payload) => {
       return Promise.all([
         getVisitorEmail({ visitorId: payload.visitorId }),
@@ -102,13 +127,19 @@ export async function handler(event, context) {
     .then(([email, npsRating]) => {
       return updateHubSpotContact({ email, npsRating });
     })
-    .then((response) => {
+    .then((response) => {      
       if (!response.ok) {
         Promise.reject('A problem occurred while create a HubSpot contact: '
                        + `${response.status} ${response.statusText}`);
       }
+      return response;
     })
-    .catch((error) => console.error(error));
+    .catch((error) => {
+      formatResponse({
+        statusCode: 500,
+        body: { error }
+      });
+    })
 }
 
 
