@@ -19,7 +19,7 @@ checkEnv({
 
 const { PENDO_API_KEY, HUBSPOT_API_KEY } = process.env;
 
-function processFetchResponse(response) {
+function formatFetchResponse(response) {
   return new Promise((resolve, reject) => {
     const reply = {
       ok: false,
@@ -45,6 +45,19 @@ function processFetchResponse(response) {
     }
   });
 }
+
+export function formatResponse(options) {
+  options = options || {};
+  return {
+    isBase64Encoded: options.isBase64Encoded || false,
+    statusCode: options.statusCode || 200,
+    headers: Object.assign({
+      'content-type': 'application/json'
+    }, options.headers),
+    body: options.body || {}
+  };
+}
+
 
 const pendoClient = (function (options) {
   const { baseUrl, version, pendoApiKey } = options;
@@ -88,19 +101,6 @@ const hubspotClient = (function (options) {
   hubspotApiKey: HUBSPOT_API_KEY
 }));
 
-
-export function formatResponse(options) {
-  options = options || {};
-  return {
-    isBase64Encoded: options.isBase64Encoded || false,
-    statusCode: options.statusCode || 200,
-    headers: Object.assign({
-      'content-type': 'application/json'
-    }, options.headers),
-    body: options.body || {}
-  };
-}
-
 export function preprocessPendoEvent(payload) {
   payload = JSON.parse(payload);
   const { event, visitorId, properties: { nps } } = payload;
@@ -111,15 +111,15 @@ export function preprocessPendoEvent(payload) {
         body: { error: 'nps is not defined' }
       }));
     } else {
-      resolve({ event, visitorId, nps });
+      resolve({ visitorId, npsRating: nps.rating });
     }
   });
 };
 
-export function getVisitorEmail(options) {
-  return pendoClient.getVisitor(options.visitorId)
+export function getVisitorEmail(visitorId) {
+  return pendoClient.getVisitor(visitorId)
     .then((response) => {
-      return processFetchResponse(response)
+      return formatFetchResponse(response)
         .then((response) => {
           const { email, metadata: { agent: { email: agent_email } } }
                 = response.body;
@@ -138,26 +138,10 @@ export function updateHubSpotContact(options) {
 
 export async function handler(event, context) {
   return preprocessPendoEvent(event.body)
-    .then((payload) => {
-      return Promise.all([
-        getVisitorEmail({ visitorId: payload.visitorId }),
-        payload.nps.rating
-      ])
-    })
-    .then(([email, npsRating]) => {
-      return updateHubSpotContact({ email, npsRating });
-    })
-    .then((response) => {      
-      if (!response.ok) {
-        return Promise.reject(formatResponse({
-          statusCode: 500,
-          body: { error: 'A problem occurred while updating an nps_rating: '
-                  + `${response.status} ${response.statusText}` }
-        }));
-      } else {        
-        return processFetchResponse(response);
-      }
-    })
+    .then((pendoEvent) => Promise.all(
+      [ getVisitorEmail(pendoEvent.visitorId), pendoEvent.npsRating ]))
+    .then(([email, npsRating]) => updateHubSpotContact({ email, npsRating }))
+    .then((response) => formatFetchResponse(response))
     .catch((error) => error);
 }
 
