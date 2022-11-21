@@ -26,7 +26,22 @@ click 'Test'
 ```
 
 ## Using awscli
+```
+aws lambda create-function \
+	--function-name 'passNpsRatingFromPendoToHubspot' \
+    --runtime 'nodejs14.x' \
+    --handler 'index.handler' \
+    --publish \
+    --package-type Zip \
+    --zip-file fileb://function.zip \
+    --role $(aws iam list-roles --query "Roles[?RoleName='lambda-role'].Arn" --output text) \
+    --description 'A function that is notified of NPS submissions by Pendo and passes the NPS scores to HubSpot'
 
+aws lambda create-function-url-config \
+	--function-name 'passNpsRatingFromPendoToHubspot' \
+    --auth-type NONE \
+    --cors AllowOrigins="*"
+```
 
 ### In order to update the function code
 ```
