@@ -102,6 +102,7 @@ const hubspotClient = (function (options) {
 }));
 
 function isWebhookTest(payload) {
+  payload = JSON.parse(payload);
   const { event, app: { name } } = payload;
   return 'ping' === event && 'webhook-test' === name;
 }
