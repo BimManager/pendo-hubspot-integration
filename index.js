@@ -101,6 +101,11 @@ const hubspotClient = (function (options) {
   hubspotApiKey: HUBSPOT_API_KEY
 }));
 
+function isWebhookTest(payload) {
+  const { event, app: { name } } = payload;
+  return 'ping' === event && 'webhook-test' === name;
+}
+
 export function preprocessPendoEvent(payload) {
   payload = JSON.parse(payload);
   const { event, visitorId, properties: { nps } } = payload;
@@ -137,6 +142,9 @@ export function updateHubSpotContact(options) {
 }
 
 export async function handler(event, context) {
+  if (isWebhookTest(event.body)) {
+    return Promise.resolve(formatResponse({ statusCode: 200 }));
+  }
   return preprocessPendoEvent(event.body)
     .then((pendoEvent) => Promise.all(
       [ getVisitorEmail(pendoEvent.visitorId), pendoEvent.npsRating ]))
