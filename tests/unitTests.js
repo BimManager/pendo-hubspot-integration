@@ -1,7 +1,11 @@
 import * as assert from 'assert';
 import * as qs from 'querystring';
 
+import dotenv from 'dotenv';
+
 import { checkEnv, formatResponse, preprocessPendoEvent } from '../index.js';
+
+dotenv.config({ override: true });
 
 const npsDisplayedEventPayload = {
   "app": {
@@ -107,9 +111,11 @@ const npsSubmittedEventPayload = {
 };
 
 (function testCheckEnv() {
-  let keys = [ 'PENDO_API_KEY', 'HUBSPOT_API_KEY' ];
+  process.env['PENDO_API_KEY'] = 'random';
+  process.env['HUBSPOT_API_TOKEN' ] = 'what?';
+  let keys = [ 'PENDO_API_KEY', 'HUBSPOT_API_TOKEN' ];
   checkEnv({ keys, onMissing: () => assert.fail() });
-  keys = [ 'PENDO_API_KEY', 'HUBSPOT_API_KEY', 'DUMMY' ];
+  keys = [ 'PENDO_API_KEY', 'HUBSPOT_API_TOKEN', 'DUMMY' ];
   checkEnv({ keys, onMissing: (key) => assert.equal(key, 'DUMMY') });
 }());
 
