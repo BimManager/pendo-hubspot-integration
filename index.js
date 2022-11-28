@@ -1,3 +1,4 @@
+import { log, inspect } from 'node:util';
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
 
@@ -143,6 +144,7 @@ export function updateHubSpotContact(options) {
 }
 
 export async function handler(event, context) {
+  log(event);
   if (isWebhookTest(event.body)) {
     return Promise.resolve(formatResponse({ statusCode: 200 }));
   }
