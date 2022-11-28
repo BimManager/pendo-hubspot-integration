@@ -2,7 +2,7 @@ import { log, inspect } from 'node:util';
 import fetch from 'node-fetch';
 import dotenv from 'dotenv';
 
-dotenv.config();
+dotenv.config({ override: true });
 
 export function checkEnv(options) {
   options.keys
@@ -11,14 +11,14 @@ export function checkEnv(options) {
 }
 
 checkEnv({
-  keys: [ 'PENDO_API_KEY', 'HUBSPOT_API_KEY' ],
+  keys: [ 'PENDO_API_KEY', 'HUBSPOT_API_TOKEN' ],
   onMissing: (key) => {
     console.error(`${key} is undefined. Exiting...`);
     process.exit(1);
   }
 });
 
-const { PENDO_API_KEY, HUBSPOT_API_KEY } = process.env;
+const { PENDO_API_KEY, HUBSPOT_API_TOKEN } = process.env;
 
 function formatFetchResponse(response) {
   return new Promise((resolve, reject) => {
@@ -81,15 +81,16 @@ const pendoClient = (function (options) {
 }));
 
 const hubspotClient = (function (options) {
-  const { baseUrl, version, hubspotApiKey } = options;
+  const { baseUrl, version, hubspotApiToken } = options;
   const headers = {
     'content-type': 'application/json',
+    'authorization': `Bearer ${hubspotApiToken}`
   };
   return {
     createOrUpdateContact: function (email, properties) {
       return fetch(
         `${baseUrl}/contacts/${version}/contact/createOrUpdate/`
-          + `email/${email}?hapikey=${hubspotApiKey}`, {
+          + `email/${email}`, {
             method: 'POST',
             headers: headers,
             body: JSON.stringify({ properties: properties })
@@ -99,7 +100,7 @@ const hubspotClient = (function (options) {
 }({
   baseUrl: 'https://api.hubapi.com',
   version: 'v1',
-  hubspotApiKey: HUBSPOT_API_KEY
+  hubspotApiToken: HUBSPOT_API_TOKEN
 }));
 
 function isWebhookTest(payload) {
@@ -138,6 +139,8 @@ export function getVisitorEmail(visitorId) {
 }
 
 export function updateHubSpotContact(options) {
+  log(`email: ${options.email}`);
+  log(`npsRating: ${options.npsRating}`);
   return hubspotClient.createOrUpdateContact(options.email, [
     { property: 'nps_rating', value: options.npsRating }
   ]);
